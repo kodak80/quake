@@ -223,6 +223,7 @@ void	VID_Shutdown (void)
 		    video_atari_shutdown();
         }
 		#endif
+		isVideoInited = false;
 	}
 }
 

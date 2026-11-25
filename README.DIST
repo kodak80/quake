@@ -1,4 +1,3 @@
-
 Atari Quake
 https://github.com/agranlund/quake
 
@@ -11,13 +10,37 @@ This work in progress port attempts to add support for non Falcon hardware.
 Changes:
 - NOVA graphics card support
 - Do not use STe/Falcon DMA sound when not available
-- Reduced heapsize to 8mb
+- Reduced heapsize to 8mb (16mb when there is 24mb or more free)
+- Keyboard and mouse on machines without a real IKBD ACIA (Raven060,
+  EmuTOS clones) through the TOS 2.0+ kbdvec / mousevec vectors
+- Keyboard and video are restored if the game exits with an error
+
+Input options:
+  (default)   Falcon/TT: original ACIA handler, everything else: kbdvec
+  -kbdvec     force the TOS kbdvec/mousevec handler (needs TOS 2.0+/EmuTOS)
+  -ikbd       force the original ACIA handler
+  -noinput    no keyboard/mouse hooks (self running demo only)
+  -nomouse    keyboard only
+  -mouselook  always use the mouse to look around
+  -mem <mb>   heap size in megabytes
 
 Issues:
-There is no input support yet, meaning you cannot actually play or quit the game.
-You can pretty much only watch the self running demo at this point.
+- No sound on machines without Falcon compatible DMA sound.
+- Run it from plain TOS/EmuTOS. Under MiNT with memory protection the
+  input handlers can not be called from the keyboard interrupt.
 
 
-usage:
-Copy Quake PAK files into the ID1 folder
-Run quake.ttp
+Usage:
+Copy the Quake PAK files into the ID1 folder and run quake.ttp
+
+  Shareware (episode 1):  ID1\PAK0.PAK
+  Full version:           ID1\PAK0.PAK and ID1\PAK1.PAK
+
+The full version needs PAK1.PAK from your own copy of Quake (the
+original CD, Steam or GOG releases all contain it, in the id1 folder).
+With the 2021 Steam/GOG release use the original files from Quake\id1,
+not the ones in the "rerelease" folder: those need a newer engine.
+Original v1.06 sizes: PAK0.PAK 18,689,235 bytes, PAK1.PAK 34,257,856.
+Once PAK1.PAK is present the console shows "Playing registered version"
+and all four episodes are available. The shareware PAK0.PAK and the
+full version PAK0.PAK are the same file.

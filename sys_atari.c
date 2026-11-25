@@ -31,10 +31,10 @@
 #include "errno.h"
 
 #include "keys_atari_asm.h"
+#include "keys_atari_vec.h"
 #include "in_atari.h"
 
 
-#define NO_ATARI_IKBD
 //#define NO_ATARI_PRINTF
 #define SYS_PRINTF_SERIAL
 
@@ -49,6 +49,65 @@ int g_scancodeShiftDepressed = 0;
 static unsigned char unshiftToAscii[128];
 static unsigned char shiftToAscii[128];
 static unsigned char capsToAscii[128];
+
+/*
+ * Input backends:
+ *  INPUT_ACIA   - original Falcon/TT code, replaces ikbdsys and reads the
+ *                 IKBD ACIA directly (keys_atari_asm.s)
+ *  INPUT_KBDVEC - TOS >= 2.0 kbdvec/mousevec hooks (keys_atari_vec.c),
+ *                 works on Raven060 / EmuTOS where there is no real ACIA
+ */
+#define INPUT_NONE      0
+#define INPUT_ACIA      1
+#define INPUT_KBDVEC    2
+int g_inputMode = INPUT_NONE;
+
+static void Sys_InitInput (void)
+{
+	long mch = 0;
+	int  want;
+
+	if( COM_CheckParm( "-noinput" ) )
+		return;
+
+	if( COM_CheckParm( "-ikbd" ) )
+		want = INPUT_ACIA;
+	else if( COM_CheckParm( "-kbdvec" ) )
+		want = INPUT_KBDVEC;
+	else
+	{
+		// keep the proven ACIA path on real Falcon / TT hardware,
+		// use the TOS vectors everywhere else (Raven, clones, emulators)
+		Getcookie( C__MCH, &mch );
+		mch >>= 16;
+		if( mch == 2 || mch == 3 )
+			want = INPUT_ACIA;
+		else
+			want = INPUT_KBDVEC;
+	}
+
+	if( want == INPUT_KBDVEC )
+	{
+		if( atari_vec_init() )
+		{
+			g_inputMode = INPUT_KBDVEC;
+			return;
+		}
+		printf( "kbdvec input needs TOS 2.0 or newer, using ACIA input\n" );
+	}
+
+	atari_ikbd_init();
+	g_inputMode = INPUT_ACIA;
+}
+
+static void Sys_ShutdownInput (void)
+{
+	if( g_inputMode == INPUT_KBDVEC )
+		atari_vec_shutdown();
+	else if( g_inputMode == INPUT_ACIA )
+		atari_ikbd_shutdown();
+	g_inputMode = INPUT_NONE;
+}
 
 /*
  * TODO:
@@ -94,10 +153,8 @@ void Sys_Init( void )
 	// clear scancode buffer
 	memset( g_scancodeBuffer, 0, SCANCODE_BUFFER_SIZE );
 
-	// setup new ikbd handler
-#ifndef NO_ATARI_IKBD    
-	atari_ikbd_init();
-#endif    
+	// setup keyboard / mouse handler
+	Sys_InitInput();
 
 	// get translation tables
 	pSKeyboards = Keytbl( KT_NOCHANGE, KT_NOCHANGE, KT_NOCHANGE );
@@ -296,6 +353,16 @@ void Sys_MakeCodeWriteable (unsigned long startaddr, unsigned long length)
 void Sys_Error (char *error, ...)
 {
 	va_list         argptr;
+	static qboolean inError = false;
+
+	// give the machine back before reporting, otherwise the keyboard
+	// vectors keep pointing into freed memory after exit
+	if( !inError )
+	{
+		inError = true;
+		Sys_ShutdownInput();
+		VID_Shutdown();
+	}
 
 	printf ("Sys_Error: ");
 	va_start (argptr,error);
@@ -319,9 +386,7 @@ void Sys_Printf (char *fmt, ...)
 void Sys_Quit (void)
 {
 	Host_Shutdown();
-#ifndef NO_ATARI_IKBD
-	atari_ikbd_shutdown();
-#endif
+	Sys_ShutdownInput();
 	exit( 0 );
 }
 
@@ -358,17 +423,11 @@ void Sys_SendKeyEvents (void)
 		scancode = g_scancodeBuffer[g_scancodeBufferTail++];
 		g_scancodeBufferTail &= SCANCODE_BUFFER_SIZE-1;
 
-		// it's fucking important to pass this ascii value as
-		// unsigned char !!!
-		if( g_scancodeShiftDepressed == 0 )
-		{
-			ascii = unshiftToAscii[scancode & 0x7f];
-		}
-		else
-		{
-			g_scancodeShiftDepressed = 0;
-			ascii = shiftToAscii[scancode & 0x7f];
-		}
+		// pass the unshifted key number as unsigned char; the engine
+		// applies shift itself (keyshift[]) where it matters
+		ascii = unshiftToAscii[scancode & 0x7f];
+		if( ascii == 0 )
+			continue;
 
 		if( ( scancode & 0x80 ) == 0 )
 		{
@@ -397,12 +456,16 @@ int main (int argc, char **argv)
 	double	time, oldtime, newtime;
 	int		j;
 
+	COM_InitArgv (argc, argv);
+
 	Sys_Init();
 
-	parms.memsize = 8*1024*1024;       // original PC version = 5.5mb
+	// default heap: 8mb (original PC version = 5.5mb), raised to 16mb when
+	// there is plenty of RAM so the larger registered / mission pack maps fit
+	parms.memsize = 8*1024*1024;
+	if( Mxalloc( -1, MX_PREFTTRAM ) >= 24L*1024*1024 )
+		parms.memsize = 16*1024*1024;
 	parms.basedir = ".";
-
-	COM_InitArgv (argc, argv);
 
 	parms.argc = com_argc;
 	parms.argv = com_argv;

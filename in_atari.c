@@ -23,6 +23,9 @@
 
 #include "quakedef.h"
 #include "in_atari.h"
+#include "keys_atari_vec.h"
+
+extern int g_inputMode;     // sys_atari.c, 2 = kbdvec/mousevec
 
 SMouse g_mouseInfo;
 
@@ -40,13 +43,53 @@ void Force_CenterView_f (void)
 	cl.viewangles[PITCH] = 0;
 }
 
+static int  vec_dx, vec_dy;
+static int  oldButtons;
+
+// collect movement + buttons from whichever input backend is active
+static void IN_ReadMouse( int* dx, int* dy, int* left, int* right )
+{
+	if( g_inputMode == 2 )
+	{
+		int mx, my, b;
+		atari_vec_take_mouse( &mx, &my, &b );
+		vec_dx += mx;
+		vec_dy += my;
+		*left  = ( b & 2 ) ? 1 : 0;
+		*right = ( b & 1 ) ? 1 : 0;
+		if( dx ) { *dx = vec_dx; *dy = vec_dy; vec_dx = vec_dy = 0; }
+	}
+	else
+	{
+		*left  = g_mouseInfo.leftButtonDepressed ? 1 : 0;
+		*right = g_mouseInfo.rightButtonDepressed ? 1 : 0;
+		if( dx )
+		{
+			*dx = g_mouseInfo.mx;
+			*dy = g_mouseInfo.my;
+			reset_mouse_deltas = true;
+			g_mouseInfo.mx = 0;
+			g_mouseInfo.my = 0;
+		}
+	}
+}
+
 void IN_MouseCommands( void )
 {
-	if( useMouse )
-	{
-		Key_Event( K_MOUSE1, g_mouseInfo.leftButtonDepressed );
-		Key_Event( K_MOUSE2, g_mouseInfo.rightButtonDepressed );
-	}
+	int left, right, buttons;
+
+	if( !useMouse )
+		return;
+
+	IN_ReadMouse( NULL, NULL, &left, &right );
+	buttons = left | ( right << 1 );
+
+	// only send changes, so "-attack" etc. isn't re-run every frame
+	if( ( buttons ^ oldButtons ) & 1 )
+		Key_Event( K_MOUSE1, left );
+	if( ( buttons ^ oldButtons ) & 2 )
+		Key_Event( K_MOUSE2, right );
+	oldButtons = buttons;
 }
 
 void IN_MouseMove( usercmd_t *cmd )
@@ -56,12 +99,12 @@ void IN_MouseMove( usercmd_t *cmd )
 		return;
 	}
 	
-	mouse_x = g_mouseInfo.mx;
-	mouse_y = g_mouseInfo.my;
-	
-	reset_mouse_deltas = true;
-	g_mouseInfo.mx = 0;
-	g_mouseInfo.my = 0;
+	{
+		int dx, dy, left, right;
+		IN_ReadMouse( &dx, &dy, &left, &right );
+		mouse_x = dx;
+		mouse_y = dy;
+	}
 	
 	if (m_filter.value)
 	{
@@ -127,9 +170,9 @@ void IN_Mouse (void)
 		alwaysLook = true;
 	}
 	
-	// center mouse
-	mouse_x = old_mouse_x = vid.width / 2;
-	mouse_y = old_mouse_y = vid.height / 2;
+	// movement is relative, start from rest
+	mouse_x = old_mouse_x = 0;
+	mouse_y = old_mouse_y = 0;
 }
 
 void IN_Init (void)
