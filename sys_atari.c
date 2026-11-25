@@ -360,6 +360,7 @@ void Sys_Error (char *error, ...)
 	if( !inError )
 	{
 		inError = true;
+		SNDDMA_Shutdown();		// stops the Timer A interrupt
 		Sys_ShutdownInput();
 		VID_Shutdown();
 	}

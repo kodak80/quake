@@ -129,6 +129,7 @@ QUAKE_OBJS = \
 	$(BUILDDIR)/obj/snd_mem.o \
 	$(BUILDDIR)/obj/snd_mix.o \
 	$(BUILDDIR)/obj/snd_atari.o \
+	$(BUILDDIR)/obj/snd_atari_sb.o \
 	$(BUILDDIR)/obj/in_atari.o \
 	$(BUILDDIR)/obj/keys_atari_vec.o \
 	$(BUILDDIR)/obj/sys_atari.o \
@@ -391,6 +392,9 @@ $(BUILDDIR)/obj/snd_mix.o :  $(MOUNT_DIR)/snd_mix.c
 	$(DO_CC)
 
 $(BUILDDIR)/obj/snd_atari.o :$(MOUNT_DIR)/snd_atari.c
+	$(DO_CC)
+
+$(BUILDDIR)/obj/snd_atari_sb.o :$(MOUNT_DIR)/snd_atari_sb.c
 	$(DO_CC)
 
 $(BUILDDIR)/obj/in_atari.o :$(MOUNT_DIR)/in_atari.c

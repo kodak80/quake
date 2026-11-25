@@ -27,6 +27,7 @@
 #include <mint/cookie.h>
 
 #include "snd_atari_asm.h"
+#include "snd_atari_sb.h"
 
 #include "quakedef.h"
 
@@ -44,6 +45,58 @@ typedef struct
 
 static qboolean isSndInited = false;
 
+#define SND_FALCON  1
+#define SND_SB      2
+static int sndMode = 0;
+
+#define SB_BUFFER_SIZE	64*1024		// 16384 16-bit stereo frames, power of 2
+
+/*
+ * No Falcon DMA sound: try a Sound Blaster on the ISA bus (Raven060).
+ * Same 16-bit stereo buffer layout as the Falcon path so the mixer is
+ * unchanged; the Timer A interrupt plays it back as 8-bit mono.
+ */
+static qboolean SNDDMA_InitSB(void)
+{
+	int freq = 11025;
+	int port;
+
+	if( COM_CheckParm( "-nosb" ) )
+		return false;
+
+	memset( &atari_shm, 0, sizeof( dma_t ) );
+	shm = &atari_shm;
+
+	shm->buffer = (char*)malloc( SB_BUFFER_SIZE + 3 );
+	if( shm->buffer == NULL )
+	{
+		Con_Printf( "Not enough memory for sound buffer\n" );
+		return false;
+	}
+	shm->buffer = (char*)( ( (long)shm->buffer + 3 ) & ~3L );
+	memset( shm->buffer, 0, SB_BUFFER_SIZE );
+
+	port = atari_sb_init( shm->buffer, SB_BUFFER_SIZE, &freq );
+	if( port == 0 )
+	{
+		Con_Printf( "Sound system cannot be initialized!\n" );
+		return false;
+	}
+
+	shm->splitbuffer = 0;
+	shm->samplebits = 16;
+	shm->channels = 2;
+	shm->speed = freq;
+	shm->samples = SB_BUFFER_SIZE/2;	// number of mono samples
+	shm->submission_chunk = 1;
+	shm->samplepos = 0;
+
+	Con_Printf( "Sound Blaster at %x, %d Hz\n", port, freq );
+	sndMode = SND_SB;
+	isSndInited = true;
+	return true;
+}
+
 qboolean SNDDMA_Init(void)
 {
     long snd_cookie = 0;
@@ -58,8 +111,7 @@ qboolean SNDDMA_Init(void)
 
     if (snd_cookie == 0)
     {
-		Con_Printf( "Sound system cannot be initialized!\n" );
-        return false;
+		return SNDDMA_InitSB();
     }
 
 	if( Locksnd() == SNDLOCKED )
@@ -107,6 +159,7 @@ qboolean SNDDMA_Init(void)
 	Buffoper( SB_PLA_ENA | SB_PLA_RPT );	/* enable playback in loop mode */
 	
 	shm->samplepos = 0;
+	sndMode = SND_FALCON;
 	isSndInited = true;
 	return true;
 }
@@ -118,6 +171,12 @@ int SNDDMA_GetDMAPos(void)
 	if( !isSndInited )
 	{
 		return 0;
+	}
+
+	if( sndMode == SND_SB )
+	{
+		shm->samplepos = atari_sb_getpos() / 2;
+		return shm->samplepos;
 	}
 	
 	if( Buffptr( &SDmaBuffers ) != 0 )
@@ -133,7 +192,11 @@ int SNDDMA_GetDMAPos(void)
 
 void SNDDMA_Shutdown(void)
 {
-	if( isSndInited )
+	if( isSndInited && sndMode == SND_SB )
+	{
+		atari_sb_shutdown();
+	}
+	else if( isSndInited )
 	{
 		Buffoper( 0x0000 );	/* disable playback */
 		Devconnect( 0x0000, DAC, CLK25M, CLK12K, NO_SHAKE );	/* nothing -> DAC */
@@ -142,6 +205,8 @@ void SNDDMA_Shutdown(void)
 		// restore sound regs
 		sound_atari_shutdown();
 	}
+	isSndInited = false;
+	sndMode = 0;
 }
 
 /*

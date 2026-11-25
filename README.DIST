@@ -14,6 +14,8 @@ Changes:
 - Keyboard and mouse on machines without a real IKBD ACIA (Raven060,
   EmuTOS clones) through the TOS 2.0+ kbdvec / mousevec vectors
 - Keyboard and video are restored if the game exits with an error
+- Sound Blaster output on ISA machines (Raven060) without DMA: MFP
+  Timer A plays 8-bit mono at ~11kHz, as in pmdoom. -nosb disables it.
 
 Input options:
   (default)   Falcon/TT: original ACIA handler, everything else: kbdvec
@@ -25,7 +27,7 @@ Input options:
   -mem <mb>   heap size in megabytes
 
 Issues:
-- No sound on machines without Falcon compatible DMA sound.
+- Sound needs Falcon DMA sound or a Sound Blaster compatible ISA card.
 - Run it from plain TOS/EmuTOS. Under MiNT with memory protection the
   input handlers can not be called from the keyboard interrupt.
 
