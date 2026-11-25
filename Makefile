@@ -25,7 +25,7 @@ STACK=${bin-prefix}stack
 FLAGS=${bin-prefix}flags
 STRIP=${bin-prefix}strip -s
 
-BASE_CFLAGS=-Dstricmp=strcasecmp -m68060 -Wall -DM68K_MIX -DM68KASM
+BASE_CFLAGS=-std=gnu99 -Dstricmp=strcasecmp -m68060 -Wall -DM68K_MIX -DM68KASM
 RELEASE_CFLAGS=$(BASE_CFLAGS) -O2 -fomit-frame-pointer -ffast-math
 DEBUG_CFLAGS=$(BASE_CFLAGS) -g
 LDFLAGS=-lm
@@ -165,7 +165,7 @@ $(BUILDDIR)/quake.ttp : $(QUAKE_OBJS) $(QUAKE_M68K_OBJS)
 #$(BUILDDIR)/quake.ttp : $(QUAKE_OBJS)
 #	$(CC) $(CFLAGS) -o $@ $(QUAKE_OBJS) $(LDFLAGS)
 	$(STACK) --fix=512k $(BUILDDIR)/quake.ttp
-	$(FLAGS) -S $(BUILDDIR)/quake.ttp
+	$(FLAGS) -S --mfastload --mfastram --mfastalloc $(BUILDDIR)/quake.ttp
 	cp $(BUILDDIR)/quake.ttp $(MOUNT_DIR)
 	$(STRIP) quake.ttp
 	

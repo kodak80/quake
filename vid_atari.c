@@ -49,6 +49,11 @@ static qboolean isVideoInited = false;
 static qboolean isSvPresent = false;
 static qboolean isNovaPresent = false;
 
+// "vid_noblit 1" skips copying the frame to the graphics card. Only useful
+// for measuring: compare "timedemo demo1" with 0 and 1 to see what the
+// ISA transfer costs.
+cvar_t vid_noblit = {"vid_noblit","0"};
+
 static char* screen2 = NULL;	// logical screen
 static char* screen3 = NULL;	// temp screen
 #define screen	screen2
@@ -119,6 +124,8 @@ void	VID_ShiftPalette (unsigned char *palette)
 
 void	VID_Init (unsigned char *palette)
 {
+	Cvar_RegisterVariable( &vid_noblit );
+
 	Supexec( CheckSvPresence );
     isNovaPresent = video_nova_exist();
 
@@ -236,6 +243,8 @@ void	VID_Update (vrect_t *rects)
 	#ifndef NO_ATARI_VIDEO
     if ( isNovaPresent )
     {
+        if ( vid_noblit.value )
+            return;
         while (rects)
         {
             video_nova_blit( vid.buffer, rects->x, rects->y, rects->width, rects->height );
